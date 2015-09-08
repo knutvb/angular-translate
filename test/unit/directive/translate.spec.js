@@ -21,7 +21,10 @@ describe('pascalprecht.translate', function () {
           'TEXT_WITH_VALUE': 'This is a text with given value: {{value}}',
           'HOW_ABOUT_THIS': '{{value}} + {{value}}',
           'AND_THIS': '{{value + value}}',
-          'BLANK_VALUE': ''
+          'BLANK_VALUE': '',
+          'TRANSLATION1': 'translation1',
+          'NAMESPACE1.TRANSLATION1': 'translation1WithNamespace',
+          'NAMESPACE2.TRANSLATION1': 'translation2WithNamespace'
         })
         .preferredLanguage('en');
     }));
@@ -85,6 +88,22 @@ describe('pascalprecht.translate', function () {
       element = $compile('<div translate="{{translationId}}"></div>')($rootScope);
       $rootScope.$digest();
       expect(element.text()).toBe('foo');
+    });
+
+    it('should return translation when using namespace dot', function () {
+      element = $compile('<div translate="NAMESPACE1.TRANSLATION1"></div>')($rootScope);
+      $rootScope.$digest();
+      expect(element.text()).toBe('translation1WithNamespace');
+
+      element = $compile('<div translate="NAMESPACE2.TRANSLATION1"></div>')($rootScope);
+      $rootScope.$digest();
+      expect(element.text()).toBe('translation2WithNamespace');
+    });
+
+    it('should return default translation when namespace dot not found', function () {
+      element = $compile('<div translate="NAMESPACE4.TRANSLATION1"></div>')($rootScope);
+      $rootScope.$digest();
+      expect(element.text()).toBe('translation1');
     });
 
     describe('passing translation id as content', function () {

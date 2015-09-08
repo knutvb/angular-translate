@@ -37,6 +37,7 @@ function $translate($STORAGE_KEY, $windowProvider, $translateSanitizationProvide
       $postCompilingEnabled = false,
       $forceAsyncReloadEnabled = false,
       NESTED_OBJECT_DELIMITER = '.',
+      TRANSLATION_ID_RESOLVER_DELIMITER = '.',
       loaderCache,
       directivePriority = 0,
       statefulFilter = true,
@@ -1229,6 +1230,44 @@ function $translate($STORAGE_KEY, $windowProvider, $translateSanitizationProvide
         return deferred.promise;
       };
 
+      var getPossibleTranslationIds = function (translationId) {
+        var possibleTranslationIds = [];
+        if (angular.isString(translationId) && translationId.length > 0) {
+          while (translationId.length > 0){
+            possibleTranslationIds.push(translationId);
+            var partToRemove = translationId.split(TRANSLATION_ID_RESOLVER_DELIMITER).shift();
+            if (partToRemove === translationId) {
+              return possibleTranslationIds;
+            }
+            translationId = translationId.substring(partToRemove.length + 1);
+          }
+        }
+        return possibleTranslationIds;
+      };
+
+      var discoverTranslationId = function (translationTable, translationId){
+        if (Object.prototype.hasOwnProperty.call(translationTable, translationId)) {
+          return translationId;
+        }
+        var possibleTranslationIds = getPossibleTranslationIds(translationId);
+        for (var i = 0, c = possibleTranslationIds.length; i < c; i++) {
+          var possibleTranslationId = possibleTranslationIds[i];
+          if (Object.prototype.hasOwnProperty.call(translationTable, possibleTranslationId)) {
+            return possibleTranslationId;
+          }
+        }
+        return null;
+      };
+
+      var hasTranslationId = function (translationTable, translationId) {
+        return discoverTranslationId(translationTable, translationId) !== null;
+      };
+
+      var resolveTranslationId = function (translationTable, translationId) {
+        var discoveredTranslationId = discoverTranslationId(translationTable, translationId);
+        return translationTable[discoveredTranslationId];
+      };
+
       /**
        * @name getFallbackTranslation
        * @private
@@ -1248,14 +1287,14 @@ function $translate($STORAGE_KEY, $windowProvider, $translateSanitizationProvide
         var deferred = $q.defer();
 
         var onResolve = function (translationTable) {
-          if (Object.prototype.hasOwnProperty.call(translationTable, translationId)) {
+          if (hasTranslationId(translationTable, translationId)) {
             Interpolator.setLocale(langKey);
-            var translation = translationTable[translationId];
+            var translation = resolveTranslationId(translationTable, translationId);
             if (translation.substr(0, 2) === '@:') {
               getFallbackTranslation(langKey, translation.substr(2), interpolateParams, Interpolator)
                 .then(deferred.resolve, deferred.reject);
             } else {
-              deferred.resolve(Interpolator.interpolate(translationTable[translationId], interpolateParams));
+              deferred.resolve(Interpolator.interpolate(resolveTranslationId(translationTable, translationId), interpolateParams));
             }
             Interpolator.setLocale($uses);
           } else {
@@ -1286,9 +1325,9 @@ function $translate($STORAGE_KEY, $windowProvider, $translateSanitizationProvide
       var getFallbackTranslationInstant = function (langKey, translationId, interpolateParams, Interpolator) {
         var result, translationTable = $translationTable[langKey];
 
-        if (translationTable && Object.prototype.hasOwnProperty.call(translationTable, translationId)) {
+        if (translationTable && hasTranslationId(translationTable, translationId)) {
           Interpolator.setLocale(langKey);
-          result = Interpolator.interpolate(translationTable[translationId], interpolateParams);
+          result = Interpolator.interpolate(resolveTranslationId(translationTable, translationId), interpolateParams);
           if (result.substr(0, 2) === '@:') {
             return getFallbackTranslationInstant(langKey, result.substr(2), interpolateParams, Interpolator);
           }
@@ -1424,8 +1463,8 @@ function $translate($STORAGE_KEY, $windowProvider, $translateSanitizationProvide
             Interpolator = (interpolationId) ? interpolatorHashMap[interpolationId] : defaultInterpolator;
 
         // if the translation id exists, we can just interpolate it
-        if (table && Object.prototype.hasOwnProperty.call(table, translationId)) {
-          var translation = table[translationId];
+        if (table && hasTranslationId(table, translationId)) {
+          var translation = resolveTranslationId(table, translationId);
 
           // If using link, rerun $translate with linked translationId and return it
           if (translation.substr(0, 2) === '@:') {
@@ -1483,8 +1522,8 @@ function $translate($STORAGE_KEY, $windowProvider, $translateSanitizationProvide
         }
 
         // if the translation id exists, we can just interpolate it
-        if (table && Object.prototype.hasOwnProperty.call(table, translationId)) {
-          var translation = table[translationId];
+        if (table && hasTranslationId(table, translationId)) {
+          var translation = resolveTranslationId(table, translationId);
 
           // If using link, rerun $translate with linked translationId and return it
           if (translation.substr(0, 2) === '@:') {
@@ -1920,10 +1959,13 @@ function $translate($STORAGE_KEY, $windowProvider, $translateSanitizationProvide
         if ($fallbackLanguage && $fallbackLanguage.length) {
           possibleLangKeys = possibleLangKeys.concat($fallbackLanguage);
         }
+
+
+
         for (var j = 0, d = possibleLangKeys.length; j < d; j++) {
           var possibleLangKey = possibleLangKeys[j];
           if ($translationTable[possibleLangKey]) {
-            if (typeof $translationTable[possibleLangKey][translationId] !== 'undefined') {
+            if (hasTranslationId($translationTable[possibleLangKey], translationId)) {
               result = determineTranslationInstant(translationId, interpolateParams, interpolationId);
             } else if ($notFoundIndicatorLeft || $notFoundIndicatorRight) {
               result = applyNotFoundIndicators(translationId);
